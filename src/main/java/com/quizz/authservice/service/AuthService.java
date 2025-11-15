@@ -1,12 +1,13 @@
 package com.quizz.authservice.service;
 
+import com.quizz.authservice.constant.ErrorMessages;
 import com.quizz.authservice.dto.AuthResponse;
 import com.quizz.authservice.dto.LoginRequest;
 import com.quizz.authservice.dto.RegisterRequest;
-import com.quizz.authservice.dto.UserDTO;
 import com.quizz.authservice.entity.Role;
 import com.quizz.authservice.entity.User;
 import com.quizz.authservice.exception.EmailAlreadyExistsException;
+import com.quizz.authservice.mapper.UserMapper;
 import com.quizz.authservice.repository.RoleRepository;
 import com.quizz.authservice.repository.UserRepository;
 import com.quizz.authservice.security.JwtTokenProvider;
@@ -25,10 +26,14 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * Authentication service implementation.
+ * Handles user registration and authentication operations.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class AuthService {
+public class AuthService implements IAuthService {
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
@@ -41,7 +46,7 @@ public class AuthService {
         log.info("Registering new user with email: {}", request.getEmail());
 
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new EmailAlreadyExistsException("User with this email already exists");
+            throw new EmailAlreadyExistsException(ErrorMessages.EMAIL_ALREADY_EXISTS);
         }
 
         // Create new user
@@ -58,7 +63,7 @@ public class AuthService {
 
         // Assign default role
         Role userRole = roleRepository.findByName(Role.RoleName.ROLE_USER)
-                .orElseThrow(() -> new RuntimeException("Default role not found"));
+                .orElseThrow(() -> new RuntimeException(ErrorMessages.DEFAULT_ROLE_NOT_FOUND));
         Set<Role> roles = new HashSet<>();
         roles.add(userRole);
         user.setRoles(roles);
@@ -70,11 +75,12 @@ public class AuthService {
         String jwt = generateTokenForUser(savedUser);
 
         return AuthResponse.builder()
-                .user(convertToDTO(savedUser))
+                .user(UserMapper.toDTO(savedUser))
                 .token(jwt)
                 .build();
     }
 
+    @Override
     @Transactional
     public AuthResponse login(LoginRequest request) {
         log.info("Login attempt for email: {}", request.getEmail());
@@ -90,7 +96,7 @@ public class AuthService {
         String jwt = tokenProvider.generateToken(authentication);
 
         User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new RuntimeException(ErrorMessages.USER_NOT_FOUND));
 
         // Update last login
         user.setLastLogin(LocalDateTime.now());
@@ -99,30 +105,21 @@ public class AuthService {
         log.info("User logged in successfully: {}", request.getEmail());
 
         return AuthResponse.builder()
-                .user(convertToDTO(user))
+                .user(UserMapper.toDTO(user))
                 .token(jwt)
                 .build();
     }
 
+    /**
+     * Generate JWT token for user.
+     * @param user User entity
+     * @return JWT token string
+     */
     private String generateTokenForUser(User user) {
         String roles = user.getRoles().stream()
                 .map(role -> role.getName().name())
                 .collect(Collectors.joining(","));
 
         return tokenProvider.generateTokenFromEmail(user.getEmail(), user.getId(), roles);
-    }
-
-    private UserDTO convertToDTO(User user) {
-        return UserDTO.builder()
-                .id(user.getId())
-                .email(user.getEmail())
-                .firstName(user.getFirstName())
-                .lastName(user.getLastName())
-                .roles(user.getRoles().stream()
-                        .map(role -> role.getName().name())
-                        .collect(Collectors.toSet()))
-                .createdAt(user.getCreatedAt())
-                .lastLogin(user.getLastLogin())
-                .build();
     }
 }

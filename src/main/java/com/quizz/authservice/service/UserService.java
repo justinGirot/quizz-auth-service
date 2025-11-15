@@ -1,8 +1,10 @@
 package com.quizz.authservice.service;
 
+import com.quizz.authservice.constant.ErrorMessages;
 import com.quizz.authservice.dto.UserDTO;
 import com.quizz.authservice.entity.User;
 import com.quizz.authservice.exception.ResourceNotFoundException;
+import com.quizz.authservice.mapper.UserMapper;
 import com.quizz.authservice.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,48 +14,43 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * User service implementation.
+ * Handles user management operations.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class UserService {
+public class UserService implements IUserService {
 
     private final UserRepository userRepository;
 
+    @Override
     @Transactional(readOnly = true)
     public UserDTO getUserById(Long id) {
         log.debug("Getting user by ID: {}", id);
         User user = userRepository.findById(id)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
-        return convertToDTO(user);
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorMessages.format(ErrorMessages.USER_NOT_FOUND_WITH_ID, id)));
+        return UserMapper.toDTO(user);
     }
 
+    @Override
     @Transactional(readOnly = true)
     public UserDTO getUserByEmail(String email) {
         log.debug("Getting user by email: {}", email);
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
-        return convertToDTO(user);
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        ErrorMessages.format(ErrorMessages.USER_NOT_FOUND_WITH_EMAIL, email)));
+        return UserMapper.toDTO(user);
     }
 
+    @Override
     @Transactional(readOnly = true)
     public List<UserDTO> getAllUsers() {
         log.debug("Getting all users");
         return userRepository.findAll().stream()
-                .map(this::convertToDTO)
+                .map(UserMapper::toDTO)
                 .collect(Collectors.toList());
-    }
-
-    private UserDTO convertToDTO(User user) {
-        return UserDTO.builder()
-                .id(user.getId())
-                .email(user.getEmail())
-                .firstName(user.getFirstName())
-                .lastName(user.getLastName())
-                .roles(user.getRoles().stream()
-                        .map(role -> role.getName().name())
-                        .collect(Collectors.toSet()))
-                .createdAt(user.getCreatedAt())
-                .lastLogin(user.getLastLogin())
-                .build();
     }
 }

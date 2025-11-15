@@ -2,25 +2,37 @@ spring:
   application:
     name: auth-service
 
+  # PostgreSQL Database Configuration
   datasource:
-    url: jdbc:h2:file:./data/auth
-    driver-class-name: org.h2.Driver
-    username: sa
-    password:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/quiz_auth}
+    username: ${DATABASE_USERNAME:postgres}
+    password: ${DATABASE_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 20000
+      idle-timeout: 300000
+      max-lifetime: 1200000
 
+  # JPA Configuration
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: true
+      ddl-auto: validate  # Liquibase manages schema
+    show-sql: false
     properties:
       hibernate:
         format_sql: true
-        dialect: org.hibernate.dialect.H2Dialect
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          time_zone: UTC
+    open-in-view: false
 
-  h2:
-    console:
-      enabled: true
-      path: /h2-console
+  # Liquibase Configuration
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.xml
+    drop-first: false
 
 server:
   port: 8081
@@ -39,7 +51,37 @@ eureka:
 # JWT Configuration
 jwt:
   secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
-  expiration: 86400000 # 24 hours in milliseconds
+  expiration: ${JWT_EXPIRATION:86400000} # 24 hours in milliseconds
+  issuer: quiz-auth-service
+  audience: quiz-application
+
+# CORS Configuration
+cors:
+  allowed-origins:
+    - ${CORS_ALLOWED_ORIGIN_1:http://localhost:5173}
+    - ${CORS_ALLOWED_ORIGIN_2:http://localhost:5174}
+    - ${CORS_ALLOWED_ORIGIN_3:http://localhost:3000}
+    - ${CORS_ALLOWED_ORIGIN_4:http://localhost:8080}
+  allowed-methods:
+    - GET
+    - POST
+    - PUT
+    - DELETE
+    - OPTIONS
+  allowed-headers:
+    - "*"
+  allow-credentials: true
+  max-age: 3600
+
+# Application Configuration
+app:
+  name: Quiz Auth Service
+  version: 1.0.0
+  environment: ${APP_ENVIRONMENT:dev}
+  security:
+    min-password-length: 6
+    max-login-attempts: 5
+    lockout-duration-minutes: 30
 
 # OpenAPI Configuration
 springdoc:

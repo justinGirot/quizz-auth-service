@@ -1,0 +1,46 @@
+# Test Configuration
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+
+  liquibase:
+    enabled: true
+    change-log: classpath:db/changelog/db.changelog-master.xml
+    drop-first: true  # Clean database for each test run
+
+# Disable Eureka for tests
+eureka:
+  client:
+    enabled: false
+
+# JWT Configuration for tests
+jwt:
+  secret: testSecretKeyForJWTTokenGenerationThatIsAtLeast256BitsLong1234567890
+  expiration: 3600000
+
+# CORS Configuration for tests
+cors:
+  allowed-origins:
+    - http://localhost:3000
+  allowed-methods:
+    - "*"
+  allowed-headers:
+    - "*"
+  allow-credentials: true
+  max-age: 3600
+
+# Disable actuator endpoints in tests
+management:
+  endpoints:
+    enabled-by-default: false
