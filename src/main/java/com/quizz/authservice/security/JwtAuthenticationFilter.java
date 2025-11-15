@@ -1,7 +1,9 @@
 package com.quizz.authservice.security;
 
+import com.quizz.authservice.config.properties.JwtProperties;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +18,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 
+/**
+ * JWT Authentication Filter for processing JWT tokens from cookies or Authorization headers.
+ * Extracts and validates JWT tokens, then sets the authentication in the security context.
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -23,6 +29,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtTokenProvider tokenProvider;
     private final UserDetailsServiceImpl userDetailsService;
+    private final JwtProperties jwtProperties;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -52,10 +59,44 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
+    /**
+     * Extract JWT token from request.
+     * First tries to get token from httpOnly cookie (preferred method).
+     * Falls back to Authorization header for backwards compatibility.
+     * @param request HTTP request
+     * @return JWT token or null if not found
+     */
     private String getJwtFromRequest(HttpServletRequest request) {
+        // Try to get token from httpOnly cookie first (recommended for security)
+        String tokenFromCookie = getTokenFromCookie(request);
+        if (StringUtils.hasText(tokenFromCookie)) {
+            return tokenFromCookie;
+        }
+
+        // Fall back to Authorization header (for backwards compatibility)
         String bearerToken = request.getHeader("Authorization");
         if (StringUtils.hasText(bearerToken) && bearerToken.startsWith("Bearer ")) {
             return bearerToken.substring(7);
+        }
+
+        return null;
+    }
+
+    /**
+     * Extract JWT token from httpOnly cookie.
+     * Uses the cookie name configured in JwtProperties.
+     * @param request HTTP request
+     * @return JWT token from cookie or null if not found
+     */
+    private String getTokenFromCookie(HttpServletRequest request) {
+        Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            String cookieName = jwtProperties.getCookie().getName();
+            for (Cookie cookie : cookies) {
+                if (cookieName.equals(cookie.getName())) {
+                    return cookie.getValue();
+                }
+            }
         }
         return null;
     }
