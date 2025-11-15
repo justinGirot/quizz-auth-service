@@ -5,6 +5,7 @@ Authentication and user management service for the Quiz Application microservice
 ## Features
 
 - ✅ User registration and authentication
+- ✅ **Cookie-based JWT authentication** with httpOnly cookies for enhanced security
 - ✅ JWT token generation and validation
 - ✅ Role-based access control (USER, ADMIN, MODERATOR)
 - ✅ Eureka service discovery integration
@@ -12,6 +13,7 @@ Authentication and user management service for the Quiz Application microservice
 - ✅ Comprehensive exception handling
 - ✅ H2 database for development
 - ✅ Spring Security with BCrypt password hashing
+- ✅ Clean code and clean architecture principles
 
 ## Technology Stack
 
@@ -111,6 +113,8 @@ Content-Type: application/json
 }
 
 Response (201 Created):
+Set-Cookie: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...; HttpOnly; Secure; Path=/; Max-Age=604800; SameSite=Strict
+
 {
   "user": {
     "id": 1,
@@ -135,6 +139,8 @@ Content-Type: application/json
 }
 
 Response (200 OK):
+Set-Cookie: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...; HttpOnly; Secure; Path=/; Max-Age=604800; SameSite=Strict
+
 {
   "user": {
     "id": 1,
@@ -152,20 +158,24 @@ Response (200 OK):
 #### Logout User
 ```http
 POST /api/auth/logout
-Authorization: Bearer <token>
+Cookie: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 Response (200 OK):
+Set-Cookie: token=; HttpOnly; Secure; Path=/; Max-Age=0; SameSite=Strict
+
 {
   "message": "Logged out successfully"
 }
 ```
+
+**Note**: The logout endpoint clears the authentication cookie by setting Max-Age=0.
 
 ### User Endpoints (Authenticated)
 
 #### Get User by ID
 ```http
 GET /api/users/{id}
-Authorization: Bearer <token>
+Cookie: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 Response (200 OK):
 {
@@ -181,14 +191,16 @@ Response (200 OK):
 #### Get User by Email
 ```http
 GET /api/users/email/{email}
-Authorization: Bearer <token>
+Cookie: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
 #### Get All Users (Admin Only)
 ```http
 GET /api/users
-Authorization: Bearer <token>
+Cookie: token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
+
+**Note**: All authenticated endpoints accept JWT tokens via **httpOnly cookies** (primary method) or via `Authorization: Bearer <token>` header (fallback for backward compatibility).
 
 ## API Documentation
 
@@ -219,6 +231,29 @@ Response:
 
 ## Security
 
+### Cookie-Based JWT Authentication
+
+This service uses **httpOnly cookies** for JWT token storage, providing enhanced security:
+
+**Cookie Security Features:**
+- **HttpOnly**: Prevents JavaScript access (XSS protection)
+- **Secure**: HTTPS-only transmission in production
+- **SameSite=Strict**: Prevents CSRF attacks
+- **Max-Age**: 7 days (604800 seconds, configurable)
+- **Path**: / (available across the entire application)
+
+**Cookie Configuration** (in `application.yml`):
+```yaml
+jwt:
+  cookie:
+    name: token
+    http-only: true
+    secure: false  # Set to true in production with HTTPS
+    same-site: Strict
+    max-age: 604800  # 7 days
+    path: /
+```
+
 ### JWT Token Structure
 
 ```json
@@ -231,6 +266,8 @@ Response:
 }
 ```
 
+**Note**: Tokens are stored in httpOnly cookies AND returned in response body for flexibility. Cookies are the primary authentication mechanism.
+
 ### Password Security
 
 - Passwords are hashed using BCrypt with strength 10
@@ -239,11 +276,8 @@ Response:
 
 ### CORS Configuration
 
-The service allows requests from:
-- http://localhost:5173
-- http://localhost:5174
-- http://localhost:3000
-- http://localhost:8080 (API Gateway)
+**CORS is handled by the API Gateway** - this microservice does not configure CORS directly.
+All requests go through the API Gateway (port 8080), which manages CORS for all microservices.
 
 ## Roles
 
@@ -311,39 +345,55 @@ To run without Eureka (for local development):
 
 ```
 src/main/java/com/quizz/authservice/
-├── config/              # Configuration classes
+├── config/                  # Configuration classes
+│   ├── properties/         # Configuration properties beans
+│   │   ├── JwtProperties.java
+│   │   └── AppProperties.java
 │   ├── SecurityConfig.java
 │   ├── OpenApiConfig.java
 │   └── DataInitializer.java
-├── controller/          # REST controllers
+├── constant/               # Constants utility classes
+│   ├── ApiConstants.java
+│   └── SecurityConstants.java
+├── controller/             # REST controllers (thin, delegate to services)
 │   ├── AuthController.java
 │   └── UserController.java
-├── dto/                # Data Transfer Objects
+├── dto/                   # Data Transfer Objects
 │   ├── LoginRequest.java
 │   ├── RegisterRequest.java
 │   ├── AuthResponse.java
 │   ├── UserDTO.java
 │   └── MessageResponse.java
-├── entity/             # JPA entities
+├── entity/                # JPA entities
 │   ├── User.java
 │   └── Role.java
-├── repository/         # Spring Data repositories
+├── repository/            # Spring Data repositories
 │   ├── UserRepository.java
 │   └── RoleRepository.java
-├── security/           # JWT and security components
+├── security/              # JWT and security components
 │   ├── JwtTokenProvider.java
-│   ├── JwtAuthenticationFilter.java
+│   ├── JwtAuthenticationFilter.java (cookie-based + header fallback)
 │   ├── UserDetailsImpl.java
 │   └── UserDetailsServiceImpl.java
-├── service/            # Business logic
+├── service/               # Business logic and domain services
 │   ├── AuthService.java
-│   └── UserService.java
-├── exception/          # Custom exceptions
+│   ├── UserService.java
+│   └── CookieService.java  # Dedicated cookie management service
+├── exception/             # Custom exceptions
 │   ├── ResourceNotFoundException.java
 │   ├── EmailAlreadyExistsException.java
 │   └── GlobalExceptionHandler.java
 └── AuthServiceApplication.java
 ```
+
+### Clean Architecture Highlights
+
+- **Configuration Properties**: All config externalized with `@ConfigurationProperties` beans
+- **Constants**: Centralized in dedicated utility classes in `constant/` package
+- **Service Layer**: Single Responsibility Principle - dedicated services (e.g., `CookieService`)
+- **Constructor Injection**: Using Lombok's `@RequiredArgsConstructor`
+- **Thin Controllers**: Business logic delegated to service layer
+- **Clean Code**: No `@Value` annotations, no magic strings/numbers, no field injection
 
 ## Testing
 

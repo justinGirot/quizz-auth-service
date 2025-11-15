@@ -132,7 +132,8 @@ User {
 - Database: H2 file-based at `./data/auth.db`
 - JWT secret key (environment variable in production)
 - JWT expiration time (default: 24 hours / 86400000 ms)
-- CORS configuration (allow API Gateway at localhost:8080)
+- JWT cookie configuration (httpOnly, secure, sameSite, maxAge)
+- **Note**: CORS is handled by API Gateway - no CORS configuration needed in this service
 
 ### Environment Variables for Production
 ```
@@ -161,8 +162,8 @@ JWT_EXPIRATION=86400000
    - Return appropriate error messages without exposing internals
 
 4. **CORS:**
-   - Configure to allow API Gateway (port 8080)
-   - Don't use wildcard (*) in production
+   - CORS is handled by API Gateway - DO NOT configure CORS in this microservice
+   - API Gateway manages allowed origins, methods, and headers for all services
 
 ## Project Structure
 
@@ -170,14 +171,22 @@ JWT_EXPIRATION=86400000
 src/main/java/com/quizz/authservice/
 ├── config/
 │   ├── properties/     # Configuration properties beans (@ConfigurationProperties)
-│   └── *.java         # Security, CORS, JWT configuration classes
+│   │   ├── JwtProperties.java    # JWT config with nested CookieProperties
+│   │   └── AppProperties.java    # Application-wide config
+│   └── *.java         # Security, JWT configuration classes (no CORS - handled by Gateway)
 ├── constant/          # Constants classes (final utility classes)
-├── controller/        # REST controllers
+│   ├── ApiConstants.java
+│   └── SecurityConstants.java    # Security constants with nested classes
+├── controller/        # REST controllers (thin, delegate to services)
 ├── dto/              # Request/Response DTOs
 ├── entity/           # JPA entities (User, Role)
 ├── repository/       # Spring Data JPA repositories
 ├── service/          # Business logic and domain services
+│   ├── AuthService.java
+│   ├── UserService.java
+│   └── CookieService.java    # Dedicated cookie management service
 ├── security/         # JWT utilities, UserDetails implementation, filters
+│   └── JwtAuthenticationFilter.java  # Reads JWT from cookies (with header fallback)
 └── exception/        # Custom exceptions and handlers
 
 src/main/resources/
@@ -332,16 +341,24 @@ public class CookieService {
 ### 7. Authentication & Cookie Management
 
 **Current Implementation:**
-- JWT tokens are stored in **httpOnly cookies** (not Authorization headers)
-- Cookie configuration is in `JwtProperties.CookieProperties`
-- Cookie operations are handled by `CookieService`
+- JWT tokens are stored in **httpOnly cookies** (primary method)
+- Token also returned in response body for flexibility
+- Cookie configuration is in `JwtProperties.CookieProperties` (nested class)
+- Cookie operations are handled by dedicated `CookieService` (SRP)
 - `JwtAuthenticationFilter` reads tokens from cookies (with fallback to Authorization header)
 
 **Cookie Security Settings:**
 - `HttpOnly`: Prevents JavaScript access (XSS protection)
-- `Secure`: HTTPS only in production
+- `Secure`: HTTPS only in production (configurable)
 - `SameSite=Strict`: CSRF protection
-- `Max-Age`: 7 days (configurable)
+- `Max-Age`: 7 days / 604800 seconds (configurable)
+- `Path`: / (available across entire application)
+
+**CORS Handling:**
+- CORS is **NOT** configured in this microservice
+- All CORS configuration is handled by the API Gateway
+- The microservice removed `CorsProperties.java` and CORS configuration from `SecurityConfig.java`
+- This follows microservices best practices: API Gateway handles cross-cutting concerns
 
 ## Integration with Other Services
 
