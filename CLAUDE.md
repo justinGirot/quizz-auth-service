@@ -164,24 +164,184 @@ JWT_EXPIRATION=86400000
    - Configure to allow API Gateway (port 8080)
    - Don't use wildcard (*) in production
 
-## Project Structure (When Implemented)
+## Project Structure
 
 ```
 src/main/java/com/quizz/authservice/
-├── config/          # Security, CORS, JWT configuration
-├── controller/      # REST controllers
-├── dto/            # Request/Response DTOs
-├── entity/         # JPA entities (User, Role)
-├── repository/     # Spring Data JPA repositories
-├── service/        # Business logic
-├── security/       # JWT utilities, UserDetails implementation
-└── exception/      # Custom exceptions and handlers
+├── config/
+│   ├── properties/     # Configuration properties beans (@ConfigurationProperties)
+│   └── *.java         # Security, CORS, JWT configuration classes
+├── constant/          # Constants classes (final utility classes)
+├── controller/        # REST controllers
+├── dto/              # Request/Response DTOs
+├── entity/           # JPA entities (User, Role)
+├── repository/       # Spring Data JPA repositories
+├── service/          # Business logic and domain services
+├── security/         # JWT utilities, UserDetails implementation, filters
+└── exception/        # Custom exceptions and handlers
 
 src/main/resources/
 ├── application.yml          # Main configuration
 ├── application-dev.yml      # Dev profile
 └── application-prod.yml     # Production profile
 ```
+
+## Clean Code Principles & Best Practices
+
+**IMPORTANT:** This project follows clean code and clean architecture principles. All code must adhere to these standards.
+
+### 1. Configuration Management
+
+**✅ DO:**
+- Use `@ConfigurationProperties` beans for all configuration
+- Place properties classes in `config/properties/` package
+- Validate properties with Jakarta validation annotations (`@NotBlank`, `@Positive`, etc.)
+- Inject properties beans via constructor injection
+- Group related properties in nested static classes
+
+**❌ DON'T:**
+- Use `@Value` annotations scattered throughout the code
+- Hardcode configuration values in service/controller classes
+- Use magic numbers or strings
+
+**Example:**
+```java
+@Data
+@Component
+@Validated
+@ConfigurationProperties(prefix = "jwt")
+public class JwtProperties {
+    @NotBlank private String secret;
+    @Positive private long expiration;
+
+    private CookieProperties cookie = new CookieProperties();
+
+    @Data
+    public static class CookieProperties {
+        @NotBlank private String name = "token";
+        @Positive private int maxAge = 604800;
+        private boolean httpOnly = true;
+    }
+}
+```
+
+### 2. Constants Management
+
+**✅ DO:**
+- Create dedicated constants classes in `constant/` package
+- Use `public static final` for constants
+- Make constants classes `final` with private constructor
+- Group related constants in nested static classes
+- Document each constant with Javadoc
+
+**❌ DON'T:**
+- Scatter constants across multiple classes
+- Use magic strings or numbers inline
+- Create public constants in non-constant classes
+
+**Example:**
+```java
+public final class SecurityConstants {
+
+    private SecurityConstants() {
+        throw new UnsupportedOperationException("Utility class");
+    }
+
+    public static final String TOKEN_PREFIX = "Bearer ";
+
+    public static final class Cookie {
+        private Cookie() {
+            throw new UnsupportedOperationException("Utility class");
+        }
+
+        public static final String SET_COOKIE_HEADER = "Set-Cookie";
+        public static final String AUTH_COOKIE_FORMAT = "%s=%s; HttpOnly; %sPath=%s; Max-Age=%d; SameSite=%s";
+    }
+}
+```
+
+### 3. Service Layer Principles
+
+**✅ DO:**
+- Create dedicated service classes for specific responsibilities
+- Follow Single Responsibility Principle (SRP)
+- Inject dependencies via constructor (use `@RequiredArgsConstructor`)
+- Keep controllers thin - business logic belongs in services
+- Document service methods with Javadoc
+
+**❌ DON'T:**
+- Put business logic in controllers
+- Create "God" services that do everything
+- Use field injection (`@Autowired` on fields)
+
+**Example:**
+```java
+@Service
+@RequiredArgsConstructor
+@Slf4j
+public class CookieService {
+    private final JwtProperties jwtProperties;
+    private final AppProperties appProperties;
+
+    public void setAuthenticationCookie(HttpServletResponse response, String token) {
+        // Cookie logic here
+    }
+}
+```
+
+### 4. Dependency Injection
+
+**✅ DO:**
+- Use constructor injection exclusively
+- Use Lombok's `@RequiredArgsConstructor` for cleaner code
+- Inject interfaces, not concrete implementations (when applicable)
+- Mark dependencies as `private final`
+
+**❌ DON'T:**
+- Use field injection (`@Autowired` on fields)
+- Use setter injection
+- Create dependencies with `new` keyword in business code
+
+### 5. Controller Design
+
+**✅ DO:**
+- Keep controllers thin and focused on HTTP concerns
+- Delegate business logic to service layer
+- Use proper HTTP status codes
+- Document endpoints with OpenAPI annotations
+- Inject only necessary services
+
+**❌ DON'T:**
+- Put business logic in controllers
+- Use `@Value` annotations in controllers
+- Create helper methods for business logic
+
+### 6. Code Organization
+
+**✅ DO:**
+- Follow package-by-feature or package-by-layer consistently
+- Keep related code together
+- Use meaningful package names
+- Maintain clear separation of concerns
+
+**❌ DON'T:**
+- Mix different architectural layers
+- Create circular dependencies
+- Put everything in one package
+
+### 7. Authentication & Cookie Management
+
+**Current Implementation:**
+- JWT tokens are stored in **httpOnly cookies** (not Authorization headers)
+- Cookie configuration is in `JwtProperties.CookieProperties`
+- Cookie operations are handled by `CookieService`
+- `JwtAuthenticationFilter` reads tokens from cookies (with fallback to Authorization header)
+
+**Cookie Security Settings:**
+- `HttpOnly`: Prevents JavaScript access (XSS protection)
+- `Secure`: HTTPS only in production
+- `SameSite=Strict`: CSRF protection
+- `Max-Age`: 7 days (configurable)
 
 ## Integration with Other Services
 

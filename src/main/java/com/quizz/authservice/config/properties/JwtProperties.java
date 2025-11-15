@@ -42,4 +42,52 @@ public class JwtProperties {
      * Token audience (intended recipient)
      */
     private String audience = "quiz-application";
+
+    /**
+     * Cookie configuration for httpOnly cookie-based authentication
+     */
+    private CookieProperties cookie = new CookieProperties();
+
+    /**
+     * Nested configuration properties for JWT cookie settings.
+     */
+    @Data
+    public static class CookieProperties {
+
+        /**
+         * Cookie name for storing JWT token
+         */
+        @NotBlank(message = "Cookie name must not be blank")
+        private String name = "token";
+
+        /**
+         * Cookie max age in seconds (7 days by default)
+         */
+        @Positive(message = "Cookie max-age must be positive")
+        private int maxAge = 604800; // 7 days
+
+        /**
+         * Whether cookie should be httpOnly (prevents JavaScript access)
+         */
+        private boolean httpOnly = true;
+
+        /**
+         * Whether cookie should be secure (HTTPS only)
+         * Should be true in production
+         */
+        private boolean secure = false;
+
+        /**
+         * SameSite attribute for CSRF protection
+         * Values: Strict, Lax, or None
+         */
+        @NotBlank(message = "SameSite attribute must not be blank")
+        private String sameSite = "Strict";
+
+        /**
+         * Cookie path
+         */
+        @NotBlank(message = "Cookie path must not be blank")
+        private String path = "/";
+    }
 }
